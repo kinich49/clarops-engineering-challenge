@@ -1,8 +1,6 @@
 package com.clara.challenge.services.impl;
 
-import com.clara.challenge.entities.db.Event;
 import com.clara.challenge.entities.db.Trace;
-import com.clara.challenge.entities.db.TraceTransition;
 import com.clara.challenge.entities.db.enums.TraceStatus;
 import com.clara.challenge.exceptions.TraceNotFoundException;
 import com.clara.challenge.repositories.TraceRepository;
@@ -41,10 +39,5 @@ public class TraceServiceImpl implements TraceService, TraceIngestionService {
               trace.setRegistrationDatetime(Instant.now());
               return traceRepository.save(trace);
             });
-  }
-
-  @Override
-  public TraceTransition upsert(Trace trace, Event event) {
-    throw new IllegalStateException("Not implemented");
   }
 }

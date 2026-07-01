@@ -9,6 +9,7 @@ import java.util.List;
 public class DefaultEventIngestionFilterChain implements EventIngestionFilterChain {
 
     private final List<EventIngestionFilter> filters;
+    private int index = 0;
 
     public DefaultEventIngestionFilterChain(List<EventIngestionFilter> filters) {
         this.filters = filters;
@@ -16,9 +17,7 @@ public class DefaultEventIngestionFilterChain implements EventIngestionFilterCha
 
     @Override
     public void doFilter(EventIngestionContext context) {
-        for (var filter : filters) {
-            if (!context.shouldIngest()) break;
-            filter.doFilter(context, this);
-        }
+        if (!context.shouldIngest() || index >= filters.size()) return;
+        filters.get(index++).doFilter(context, this);
     }
 }
