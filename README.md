@@ -31,13 +31,41 @@ The goal is to know the overall status of the trace, not a single event.
   - IN_PROGRESS: When an event was in WAITING_OTHER_EVENT and the expected event arrived but was not final and did not declare a next expected event
   - ERROR: When an event with result failure and isFinal set to true arrived
 
+## Open Questions
+
+1. What should happen if the same `eventId` is received more than once?
+Return a 409 Conflict. We dont know the semantics of the eventId or if an event might be retried. For now, return a 409 signaling there is an issue on our side but not our fault.
+2. What should happen if an event arrives with a different `eventName` than the currently expected event?
+Persist it and count it as an invalid event.
+3. What should happen if the expected event arrives after the TTL already expired?
+Persist it and count it as an invalid event. It is not clear if the TTL should be treated as a hard deadline or not. 
+In case there is an issue and events are being sent with a delay, a safeguard was added to allow more time for the events to arrive
+4. Should TTL be calculated from `occurredAt` or from the time the event was received by the service?
+By the time the event was received at the service. The meaning of occurredAt is not clear enough. There could be events that were sent with occurredAt at days ago.
+5. Should a completed trace accept more events?
+Yes for event history but will not have effect on the COMPLETE status. This will allow us to debug issues somewhere in the event chain.
+6. What should happen if the first event is also a final event?
+Mark it as complete. There is no indication a Trace requires a minimal amount of events
+7. What should happen if an event with `result = ERROR` defines a next expected event?
+IT is not clear if the event result affects the trace. The technical decision was made to allow the Trace to recover if the event is not marked as final. This could allow an event to fail, mark itself as nextExpectedEvent and recover.
+8. Should `metadata` be stored as JSON, structured columns, or ignored?
+Structured columns is probably a bad choice as we dont know the structure of the metadata. JSON seems like a good choice.
+Ignoring the data might only be valid if we are sending the event to a datalake.
+9. How should the service avoid inconsistent trace states?
+Persist all events and try to keep the Trace in a consistent state by ignoring all inconsistent events. 
+10. What should be returned when querying a `traceId` that does not exist?
+A 404 is a good choice as it is the default. Other alternatives are:
+- 200 OK with no body. This might be OK if a missing TraceID is a valid business case
+- 204 NO Content. Same as 200 but a little bit more suitable
+- 410 Gone. Might be a good result if a trace could be deleted and that is an error.
+
 ## trade-offs
 
 - response status 400 and 200. A decision was made to try validating the data the client sends. We send 400 when the data is inconsistent with itself or the json is malformed, and we send 200 when the data is consistend but
   the event is not valid (e.g. unexpected event).
 - All events are stored regardless. This will increase the table size but we gain an audit trial. An alternative would be to asyncly send the data to a datalake and avoid stale data
 - TraceTransition is a two-edge sword. We gain visibility on why a trace changed status, why some events might be considered invalid, but we have two sources of truth: The events table and the TraceTransitions table.
-
+- Storing the metadata as JSON will make the metadata hard to query and hard to make joins. For example if we want to retrieve all events with a certain tag, it wont be as easy as its own structured table
 ## How to run the project
 
 exec mvn spring-boot:run with Java 21

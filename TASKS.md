@@ -125,3 +125,6 @@ This buffer:
 - the extended window should be in the properties
 - If the buffer is turned on, the TTL is extended by the seconds it is configured with
 
+# Task 13
+Modify EventService to validate the event-id is not a duplicate.
+If it is duplicate, throw a DuplicateEventException and responde with HTTP Status 409

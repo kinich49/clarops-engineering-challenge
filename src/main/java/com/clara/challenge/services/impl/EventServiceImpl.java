@@ -3,6 +3,8 @@ package com.clara.challenge.services.impl;
 import com.clara.challenge.entities.db.Event;
 import com.clara.challenge.entities.json.EventJson;
 import com.clara.challenge.entities.json.TraceJson;
+import com.clara.challenge.exceptions.DuplicateEventException;
+import com.clara.challenge.repositories.EventRepository;
 import com.clara.challenge.services.api.EventService;
 import com.clara.challenge.services.internal.EventIngestionService;
 import com.clara.challenge.services.internal.TraceIngestionService;
@@ -19,9 +21,14 @@ public class EventServiceImpl implements EventService {
 
   private final TraceIngestionService traceIngestionService;
   private final EventIngestionService eventIngestionService;
+  private final EventRepository eventRepository;
 
   @Override
   public Optional<TraceJson> acceptEvent(EventJson eventJson) {
+    if (eventRepository.existsById(eventJson.getEventId())) {
+      throw new DuplicateEventException(eventJson.getEventId());
+    }
+
     var trace = traceIngestionService.findOrCreate(eventJson.getTraceId());
     var event = buildEvent(eventJson);
     event.setTrace(trace);
