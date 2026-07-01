@@ -24,8 +24,8 @@ public class ExpectedEventMatchFilter implements EventIngestionFilter {
         if (trace.getStatus() == TraceStatus.WAITING_OTHER_EVENT &&
                 transition != null &&
                 !ObjectUtils.isEmpty(transition.getEvent().getNextExpectedEvent()) &&
-        transition.getEvent().getNextExpectedEvent().equalsIgnoreCase(newEvent.getEventName())) {
-            context.reject("Expected event: " + transition.getEvent().getEventName()
+                !transition.getEvent().getNextExpectedEvent().equalsIgnoreCase(newEvent.getEventName())) {
+            context.reject("Expected event: " + transition.getEvent().getNextExpectedEvent()
                     + " but received: " + newEvent.getEventName());
             return;
         }

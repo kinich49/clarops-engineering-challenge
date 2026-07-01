@@ -17,7 +17,7 @@ public class DefaultEventIngestionFilterChain implements EventIngestionFilterCha
     @Override
     public void doFilter(EventIngestionContext context) {
         for (var filter : filters) {
-            if (context.shouldIngest()) break;
+            if (!context.shouldIngest()) break;
             filter.doFilter(context, this);
         }
     }

@@ -39,7 +39,8 @@ Preferred package structure will be:
 
 ## When adding tests
 - Test classes must be in the test counterpart, i.e. src/main/com/example/MyClass goes to src/test/com/example/MyClassTest
-
+- The class to be tested will use subject as variable name.
+- Avoid Testing empty Spring Data repositories. Only test them when there are custom methods or custom implementations
 ### Unit Tests
 - Test classes have the Test suffix i.e. MyClass - MyClassTest
 - Test method names should follow: shouldExpectedBehavior_WhenCondition.
