@@ -18,7 +18,7 @@ class TraceNotCompletedFilterTest {
     private final TraceNotCompletedFilter subject = new TraceNotCompletedFilter();
 
     @ParameterizedTest
-    @EnumSource(value = TraceStatus.class, names = {"COMPLETED", "TTL_EXPIRED_FOR_EVENT"})
+    @EnumSource(value = TraceStatus.class, names = {"COMPLETED", "TTL_EXPIRED_FOR_EVENT", "ERROR"})
     void shouldRejectEvent_WhenTraceStatusIsTerminal(TraceStatus status) {
         var chain = mock(EventIngestionFilterChain.class);
         var context = buildContext(status);
@@ -31,7 +31,7 @@ class TraceNotCompletedFilterTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = TraceStatus.class, names = {"STARTED", "WAITING_OTHER_EVENT"})
+    @EnumSource(value = TraceStatus.class, names = {"STARTED", "WAITING_OTHER_EVENT", "IN_PROGRESS"})
     void shouldContinueChain_WhenTraceStatusIsNotTerminal(TraceStatus status) {
         var chain = mock(EventIngestionFilterChain.class);
         var context = buildContext(status);

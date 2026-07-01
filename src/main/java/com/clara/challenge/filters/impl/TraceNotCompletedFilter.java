@@ -13,7 +13,7 @@ public class TraceNotCompletedFilter implements EventIngestionFilter {
     public void doFilter(EventIngestionContext context, EventIngestionFilterChain chain) {
         TraceStatus status = context.getNewEvent().getTrace().getStatus();
 
-        if (status == TraceStatus.COMPLETED || status == TraceStatus.TTL_EXPIRED_FOR_EVENT) {
+        if (status == TraceStatus.COMPLETED || status == TraceStatus.TTL_EXPIRED_FOR_EVENT || status == TraceStatus.ERROR) {
             context.reject("Trace is already in terminal state: " + status);
             return;
         }

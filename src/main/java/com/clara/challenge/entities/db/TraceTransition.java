@@ -1,5 +1,6 @@
 package com.clara.challenge.entities.db;
 
+import com.clara.challenge.entities.db.enums.TraceStatus;
 import jakarta.persistence.*;
 import java.time.Instant;
 import lombok.Getter;
@@ -24,6 +25,10 @@ public class TraceTransition {
   @OneToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "event_id", nullable = false)
   private Event event;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "status", nullable = false)
+  private TraceStatus status;
 
   @Column(name = "expected_before")
   private Instant expectedBefore;

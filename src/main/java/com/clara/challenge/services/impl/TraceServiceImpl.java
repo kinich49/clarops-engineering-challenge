@@ -40,4 +40,10 @@ public class TraceServiceImpl implements TraceService, TraceIngestionService {
               return traceRepository.save(trace);
             });
   }
+
+  @Override
+  public Trace updateStatus(Trace trace, TraceStatus status) {
+    trace.setStatus(status);
+    return traceRepository.save(trace);
+  }
 }

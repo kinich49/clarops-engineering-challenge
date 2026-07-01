@@ -3,12 +3,12 @@ package com.clara.challenge.services.impl;
 import com.clara.challenge.entities.db.Event;
 import com.clara.challenge.entities.db.Trace;
 import com.clara.challenge.entities.db.TraceTransition;
+import com.clara.challenge.entities.db.enums.EventResult;
 import com.clara.challenge.entities.db.enums.TraceStatus;
 import com.clara.challenge.filters.EventIngestionContext;
 import com.clara.challenge.filters.EventIngestionFilter;
 import com.clara.challenge.filters.EventIngestionFilterChain;
 import com.clara.challenge.repositories.EventRepository;
-import com.clara.challenge.repositories.TraceRepository;
 import com.clara.challenge.repositories.TraceTransitionRepository;
 import com.clara.challenge.services.internal.TraceIngestionService;
 import org.junit.jupiter.api.Test;
@@ -43,9 +43,6 @@ class EventIngestionServiceImplTest {
     private EventRepository eventRepository;
 
     @Mock
-    private TraceRepository traceRepository;
-
-    @Mock
     private TraceTransitionRepository transitionRepository;
 
     @Test
@@ -66,10 +63,12 @@ class EventIngestionServiceImplTest {
         assertThat(result.transition()).isNotNull();
         assertThat(result.transition().getTrace()).isSameAs(event.getTrace());
         assertThat(result.transition().getEvent()).isSameAs(event);
+        assertThat(result.transition().getStatus()).isEqualTo(TraceStatus.STARTED);
         assertThat(result.transition().getExpectedBefore()).isBetween(before.plusSeconds(60), after.plusSeconds(60));
         assertThat(result.transition().getRegistrationDatetime()).isBetween(before, after);
         verify(eventRepository).save(event);
         verify(transitionRepository).save(any(TraceTransition.class));
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.STARTED);
     }
 
     @Test
@@ -87,6 +86,7 @@ class EventIngestionServiceImplTest {
         assertThat(result.transition()).isNull();
         verify(eventRepository).save(event);
         verify(transitionRepository, never()).save(any());
+        verifyNoInteractions(traceIngestionService);
     }
 
     @Test
@@ -105,6 +105,185 @@ class EventIngestionServiceImplTest {
         verify(eventRepository).save(event);
         verify(transitionRepository, never()).save(any());
         verifyNoInteractions(thirdFilter);
+        verifyNoInteractions(traceIngestionService);
+    }
+
+    @Test
+    void shouldSetTraceStatusToCompleted_WhenEventIsFinalAndResultIsSuccess() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.setFinalEvent(true);
+        event.setEventResult(EventResult.SUCCESS);
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.COMPLETED);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.COMPLETED);
+    }
+
+    @Test
+    void shouldSetTraceStatusToCompleted_WhenEventIsFinalAndResultIsSuccessEvenIfNextExpectedEventIsPresent() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.setFinalEvent(true);
+        event.setEventResult(EventResult.SUCCESS);
+        event.setNextExpectedEvent("RULES_EVALUATED");
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.COMPLETED);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.COMPLETED);
+    }
+
+    @Test
+    void shouldSetTraceStatusToError_WhenEventIsFinalAndResultIsError() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.setFinalEvent(true);
+        event.setEventResult(EventResult.ERROR);
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.ERROR);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.ERROR);
+    }
+
+    @Test
+    void shouldSetTraceStatusToError_WhenEventIsFinalAndResultIsErrorEvenIfNextExpectedEventIsPresent() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.setFinalEvent(true);
+        event.setEventResult(EventResult.ERROR);
+        event.setNextExpectedEvent("RULES_EVALUATED");
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.ERROR);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.ERROR);
+    }
+
+    @Test
+    void shouldSetTraceStatusToWaitingOtherEvent_WhenEventIsNotFinalAndHasNextExpectedEvent() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.setFinalEvent(false);
+        event.setNextExpectedEvent("RULES_EVALUATED");
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.WAITING_OTHER_EVENT);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.WAITING_OTHER_EVENT);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {""})
+    void shouldSetTraceStatusToStarted_WhenEventIsNotFinalAndHasNoNextExpectedEvent(String nextExpectedEvent) {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.setFinalEvent(false);
+        event.setNextExpectedEvent(nextExpectedEvent);
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.STARTED);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.STARTED);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {""})
+    void shouldSetTraceStatusToInProgress_WhenTraceWasWaitingOtherEventAndEventIsNotFinalAndHasNoNextExpectedEvent(String nextExpectedEvent) {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        event.setFinalEvent(false);
+        event.setNextExpectedEvent(nextExpectedEvent);
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.IN_PROGRESS);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.IN_PROGRESS);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {""})
+    void shouldKeepTraceStatusInProgress_WhenTraceWasAlreadyInProgressAndEventIsNotFinalAndHasNoNextExpectedEvent(String nextExpectedEvent) {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.getTrace().setStatus(TraceStatus.IN_PROGRESS);
+        event.setFinalEvent(false);
+        event.setNextExpectedEvent(nextExpectedEvent);
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.IN_PROGRESS);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void shouldSetTraceStatusToCompleted_WhenTraceWasWaitingOtherEventAndEventIsFinalAndResultIsSuccess() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        event.setFinalEvent(true);
+        event.setEventResult(EventResult.SUCCESS);
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.COMPLETED);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.COMPLETED);
+    }
+
+    @Test
+    void shouldSetTraceStatusToError_WhenTraceWasWaitingOtherEventAndEventIsFinalAndResultIsError() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        event.setFinalEvent(true);
+        event.setEventResult(EventResult.ERROR);
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.ERROR);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.ERROR);
+    }
+
+    @Test
+    void shouldSetTraceStatusToWaitingOtherEvent_WhenTraceWasWaitingOtherEventAndEventDeclaresNextExpectedEvent() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        event.setFinalEvent(false);
+        event.setNextExpectedEvent("SHIPMENT_DISPATCHED");
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.WAITING_OTHER_EVENT);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.WAITING_OTHER_EVENT);
     }
 
     @ParameterizedTest
@@ -147,9 +326,15 @@ class EventIngestionServiceImplTest {
         assertThat(captor.getValue().getTransition()).isSameAs(priorTransition);
     }
 
+    private TraceStatus capturePersistedTransitionStatus() {
+        var captor = ArgumentCaptor.forClass(TraceTransition.class);
+        verify(transitionRepository).save(captor.capture());
+        return captor.getValue().getStatus();
+    }
+
     private EventIngestionServiceImpl buildSubject(EventIngestionFilter... filters) {
         return new EventIngestionServiceImpl(
-                List.of(filters), traceIngestionService, eventRepository, traceRepository, transitionRepository);
+                List.of(filters), eventRepository, transitionRepository, traceIngestionService);
     }
 
     private EventIngestionFilter continuingFilter() {

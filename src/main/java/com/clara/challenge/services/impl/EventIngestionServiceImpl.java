@@ -2,17 +2,19 @@ package com.clara.challenge.services.impl;
 
 import com.clara.challenge.entities.db.Event;
 import com.clara.challenge.entities.db.TraceTransition;
+import com.clara.challenge.entities.db.enums.EventResult;
+import com.clara.challenge.entities.db.enums.TraceStatus;
 import com.clara.challenge.entities.misc.EventDTO;
 import com.clara.challenge.filters.EventIngestionContext;
 import com.clara.challenge.filters.EventIngestionFilter;
 import com.clara.challenge.filters.impl.DefaultEventIngestionFilterChain;
 import com.clara.challenge.repositories.EventRepository;
-import com.clara.challenge.repositories.TraceRepository;
 import com.clara.challenge.repositories.TraceTransitionRepository;
 import com.clara.challenge.services.internal.EventIngestionService;
 import com.clara.challenge.services.internal.TraceIngestionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.ObjectUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -23,20 +25,9 @@ import java.util.Optional;
 public class EventIngestionServiceImpl implements EventIngestionService {
 
     private final List<EventIngestionFilter> filters;
-    private final TraceIngestionService traceIngestionService;
     private final EventRepository eventRepository;
-    private final TraceRepository traceRepository;
     private final TraceTransitionRepository transitionRepository;
-
-    // find current trace or create new one
-    // decide if ingest event
-    // ingest if:
-    // - current trace is not completed
-    // - expected next event matches current event
-    // - ttl is not breached
-    // if ingest then persist TraceTransition
-    // persist event anyway
-
+    private final TraceIngestionService traceIngestionService;
 
     @Override
     public EventDTO ingestEvent(final Event event) {
@@ -49,8 +40,10 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         if (context.shouldIngest()) {
             event.setAccepted(true);
+            var newTraceStatus = nextTraceStatus(event);
+            traceIngestionService.updateStatus(event.getTrace(), newTraceStatus);
             var persistedEvent = eventRepository.save(event);
-            var newTransition = buildTraceTransition(persistedEvent);
+            var newTransition = buildTraceTransition(persistedEvent, newTraceStatus);
             transitionRepository.save(newTransition);
             return new EventDTO(persistedEvent, newTransition);
         } else {
@@ -59,12 +52,28 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         }
     }
 
-    private TraceTransition buildTraceTransition(final Event event) {
+    private TraceStatus nextTraceStatus(final Event event) {
+        if (event.isFinalEvent()) {
+            return event.getEventResult() == EventResult.ERROR ? TraceStatus.ERROR : TraceStatus.COMPLETED;
+        }
+        if (!ObjectUtils.isEmpty(event.getNextExpectedEvent())) {
+            return TraceStatus.WAITING_OTHER_EVENT;
+        }
+        var currentStatus = event.getTrace().getStatus();
+        if (currentStatus == TraceStatus.WAITING_OTHER_EVENT || currentStatus == TraceStatus.IN_PROGRESS) {
+            return TraceStatus.IN_PROGRESS;
+        }
+
+        return TraceStatus.STARTED;
+    }
+
+    private TraceTransition buildTraceTransition(final Event event, final TraceStatus status) {
         final var trace = event.getTrace();
         Instant now = Instant.now();
         var transition = new TraceTransition();
         transition.setTrace(trace);
         transition.setEvent(event);
+        transition.setStatus(status);
         Optional.ofNullable(event.getNextEventTtlSeconds())
                 .filter(ttl -> 0 != ttl)
                 .ifPresent(ttl -> transition.setExpectedBefore(now.plusSeconds(ttl)));
@@ -73,4 +82,6 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         return transition;
     }
+
+
 }

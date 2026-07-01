@@ -92,6 +92,19 @@ class TraceServiceImplTest {
         verify(traceRepository).save(result);
     }
 
+    @Test
+    void shouldUpdateAndPersistTraceStatus_WhenUpdateStatusIsCalled() {
+        var trace = new Trace();
+        trace.setTraceId("trace-1");
+        trace.setStatus(TraceStatus.STARTED);
+        when(traceRepository.save(trace)).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = subject.updateStatus(trace, TraceStatus.WAITING_OTHER_EVENT);
+
+        assertThat(result.getStatus()).isEqualTo(TraceStatus.WAITING_OTHER_EVENT);
+        verify(traceRepository).save(trace);
+    }
+
     private TraceTransition buildTransition(Trace trace, String eventName, EventResult eventResult,
                                              String nextExpectedEvent, Instant expectedBefore) {
         var event = new Event();

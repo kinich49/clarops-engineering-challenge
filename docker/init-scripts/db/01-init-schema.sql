@@ -52,6 +52,7 @@ CREATE
       id BIGSERIAL PRIMARY KEY,
       trace_id VARCHAR NOT NULL REFERENCES traces(trace_id),
       event_id VARCHAR NOT NULL REFERENCES events(event_id),
+      status VARCHAR NOT NULL,
       expected_before TIMESTAMPTZ,
       registration_datetime TIMESTAMPTZ NOT NULL
     );
