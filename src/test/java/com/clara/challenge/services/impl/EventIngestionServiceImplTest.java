@@ -5,6 +5,7 @@ import com.clara.challenge.entities.db.Trace;
 import com.clara.challenge.entities.db.TraceTransition;
 import com.clara.challenge.entities.db.enums.EventResult;
 import com.clara.challenge.entities.db.enums.TraceStatus;
+import com.clara.challenge.entities.misc.SafeguardProperties;
 import com.clara.challenge.filters.EventIngestionContext;
 import com.clara.challenge.filters.EventIngestionFilter;
 import com.clara.challenge.filters.EventIngestionFilterChain;
@@ -286,6 +287,141 @@ class EventIngestionServiceImplTest {
         assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.WAITING_OTHER_EVENT);
     }
 
+    @Test
+    void shouldAcceptEventAndSetTraceStatusToTtlExpiredForEvent_WhenDeadlineIsBreached() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", null);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        var priorTransition = buildPriorTransition(Instant.now().minusSeconds(100));
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(priorTransition));
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        assertThat(event.isAccepted()).isTrue();
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.TTL_EXPIRED_FOR_EVENT);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.TTL_EXPIRED_FOR_EVENT);
+    }
+
+    @Test
+    void shouldSetTraceStatusToTtlExpiredForEvent_EvenIfEventIsFinal() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", null);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        event.setFinalEvent(true);
+        event.setEventResult(EventResult.SUCCESS);
+        var priorTransition = buildPriorTransition(Instant.now().minusSeconds(100));
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(priorTransition));
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.TTL_EXPIRED_FOR_EVENT);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.TTL_EXPIRED_FOR_EVENT);
+    }
+
+    @Test
+    void shouldSetTraceStatusToTtlExpiredForEvent_EvenIfEventDeclaresNextExpectedEvent() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", 60);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        event.setNextExpectedEvent("SHIPMENT_DISPATCHED");
+        var priorTransition = buildPriorTransition(Instant.now().minusSeconds(100));
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(priorTransition));
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.TTL_EXPIRED_FOR_EVENT);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.TTL_EXPIRED_FOR_EVENT);
+    }
+
+    @Test
+    void shouldNotSetTtlExpired_WhenDeadlineNotYetReached() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", null);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        var priorTransition = buildPriorTransition(Instant.now().plusSeconds(100));
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(priorTransition));
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.IN_PROGRESS);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void shouldNotSetTtlExpired_WhenTraceStatusIsNotWaitingOtherEvent() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", null);
+        var priorTransition = buildPriorTransition(Instant.now().minusSeconds(100));
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(priorTransition));
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.STARTED);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.STARTED);
+    }
+
+    @Test
+    void shouldNotSetTtlExpired_WhenPreviousTransitionHasNoExpectedBefore() {
+        var subject = buildSubject(continuingFilter());
+        var event = buildEvent("trace-1", null);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        var priorTransition = buildPriorTransition(null);
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(priorTransition));
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.IN_PROGRESS);
+        assertThat(capturePersistedTransitionStatus()).isEqualTo(TraceStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void shouldSetTtlExpired_WhenSafeguardIsDisabledEvenWithOffsetConfigured() {
+        var subject = buildSubject(new SafeguardProperties(false, 3600L), continuingFilter());
+        var event = buildEvent("trace-1", null);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        var priorTransition = buildPriorTransition(Instant.now().minusSeconds(100));
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(priorTransition));
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.TTL_EXPIRED_FOR_EVENT);
+    }
+
+    @Test
+    void shouldSetTtlExpired_WhenSafeguardEnabledButDeadlineStillBreachedAfterOffset() {
+        var subject = buildSubject(new SafeguardProperties(true, 10L), continuingFilter());
+        var event = buildEvent("trace-1", null);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        var priorTransition = buildPriorTransition(Instant.now().minusSeconds(1000));
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(priorTransition));
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.TTL_EXPIRED_FOR_EVENT);
+    }
+
+    @Test
+    void shouldNotSetTtlExpired_WhenSafeguardOffsetKeepsDeadlineInFuture() {
+        var subject = buildSubject(new SafeguardProperties(true, 60L), continuingFilter());
+        var event = buildEvent("trace-1", null);
+        event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        var priorTransition = buildPriorTransition(Instant.now().minusSeconds(5));
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(priorTransition));
+        when(eventRepository.save(event)).thenReturn(event);
+
+        subject.ingestEvent(event);
+
+        verify(traceIngestionService).updateStatus(event.getTrace(), TraceStatus.IN_PROGRESS);
+    }
+
     @ParameterizedTest
     @NullSource
     @ValueSource(ints = {0})
@@ -333,8 +469,12 @@ class EventIngestionServiceImplTest {
     }
 
     private EventIngestionServiceImpl buildSubject(EventIngestionFilter... filters) {
+        return buildSubject(new SafeguardProperties(false, 0L), filters);
+    }
+
+    private EventIngestionServiceImpl buildSubject(SafeguardProperties safeguard, EventIngestionFilter... filters) {
         return new EventIngestionServiceImpl(
-                List.of(filters), eventRepository, transitionRepository, traceIngestionService);
+                List.of(filters), eventRepository, transitionRepository, traceIngestionService, safeguard);
     }
 
     private EventIngestionFilter continuingFilter() {
@@ -356,6 +496,16 @@ class EventIngestionServiceImplTest {
             return null;
         }).when(filter).doFilter(any(), any());
         return filter;
+    }
+
+    private TraceTransition buildPriorTransition(Instant expectedBefore) {
+        var priorEvent = new Event();
+        priorEvent.setEventId("event-prior");
+        priorEvent.setNextExpectedEvent("RULES_EVALUATED");
+        var transition = new TraceTransition();
+        transition.setEvent(priorEvent);
+        transition.setExpectedBefore(expectedBefore);
+        return transition;
     }
 
     private Event buildEvent(String traceId, Integer nextEventTtlSeconds) {
