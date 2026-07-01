@@ -5,12 +5,13 @@ import com.clara.challenge.entities.db.Trace;
 import com.clara.challenge.entities.db.TraceTransition;
 import com.clara.challenge.entities.db.enums.EventResult;
 import com.clara.challenge.entities.db.enums.TraceStatus;
+import com.clara.challenge.entities.misc.SafeguardProperties;
 import com.clara.challenge.exceptions.TraceNotFoundException;
+import com.clara.challenge.repositories.EventRepository;
 import com.clara.challenge.repositories.TraceRepository;
 import com.clara.challenge.repositories.TraceTransitionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -33,17 +34,19 @@ class TraceServiceImplTest {
     @Mock
     private TraceTransitionRepository traceTransitionRepository;
 
-    @InjectMocks
-    private TraceServiceImpl subject;
+    @Mock
+    private EventRepository eventRepository;
 
     @Test
     void shouldReturnTraceJson_WhenLatestTransitionExists() {
+        var subject = buildSubject();
         var trace = new Trace();
         trace.setTraceId("trace-1");
         trace.setStatus(TraceStatus.WAITING_OTHER_EVENT);
         var expectedBefore = Instant.now().plusSeconds(120);
         var transition = buildTransition(trace, "APPLICATION_RECEIVED", EventResult.SUCCESS, "RULES_EVALUATED", expectedBefore);
         when(traceTransitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(transition));
+        when(eventRepository.countByTraceId("trace-1")).thenReturn(buildEventCounts(3, 1));
 
         var result = subject.getTrace("trace-1");
 
@@ -53,11 +56,17 @@ class TraceServiceImplTest {
         assertThat(result.getLastEventResult()).isEqualTo("SUCCESS");
         assertThat(result.getNextExpectedEvent()).isEqualTo("RULES_EVALUATED");
         assertThat(result.getNextExpectedBefore()).isEqualTo(expectedBefore);
+        assertThat(result.getValidEvents()).isEqualTo(3);
+        assertThat(result.getInvalidEvents()).isEqualTo(1);
+        verify(traceRepository, never()).save(any());
     }
 
     @Test
-    void shouldThrowTraceNotFoundException_WhenNoTransitionExists() {
+    void shouldThrowTraceNotFoundException_WhenNeitherTransitionNorEventExists() {
+        var subject = buildSubject();
+        when(eventRepository.countByTraceId("missing")).thenReturn(buildEventCounts(0, 0));
         when(traceTransitionRepository.findLatestByTraceId("missing")).thenReturn(Optional.empty());
+        when(eventRepository.findLatestByTraceId("missing")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> subject.getTrace("missing"))
                 .isInstanceOf(TraceNotFoundException.class)
@@ -65,7 +74,89 @@ class TraceServiceImplTest {
     }
 
     @Test
+    void shouldReturnTraceJson_WhenNoTransitionExistsButAnEventDoes() {
+        var subject = buildSubject();
+        var trace = new Trace();
+        trace.setTraceId("trace-1");
+        trace.setStatus(TraceStatus.STARTED);
+        var rejectedEvent = new Event();
+        rejectedEvent.setEventId("event-1");
+        rejectedEvent.setEventName("APPLICATION_RECEIVED");
+        rejectedEvent.setEventResult(EventResult.SUCCESS);
+        rejectedEvent.setAccepted(false);
+        rejectedEvent.setTrace(trace);
+        when(eventRepository.countByTraceId("trace-1")).thenReturn(buildEventCounts(0, 1));
+        when(traceTransitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(rejectedEvent));
+
+        var result = subject.getTrace("trace-1");
+
+        assertThat(result.getTraceId()).isEqualTo("trace-1");
+        assertThat(result.getStatus()).isEqualTo("STARTED");
+        assertThat(result.getLastEventName()).isEqualTo("APPLICATION_RECEIVED");
+        assertThat(result.getLastEventResult()).isEqualTo("SUCCESS");
+        assertThat(result.getNextExpectedBefore()).isNull();
+        assertThat(result.getValidEvents()).isEqualTo(0);
+        assertThat(result.getInvalidEvents()).isEqualTo(1);
+        verify(traceRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldUpdateTraceStatusToTtlExpiredForEvent_WhenDeadlineIsBreached() {
+        var subject = buildSubject(new SafeguardProperties(false, 0L));
+        var trace = new Trace();
+        trace.setTraceId("trace-1");
+        trace.setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        var expectedBefore = Instant.now().minusSeconds(100);
+        var transition = buildTransition(trace, "APPLICATION_RECEIVED", EventResult.SUCCESS, "RULES_EVALUATED", expectedBefore);
+        when(traceTransitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(transition));
+        when(traceRepository.save(trace)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(eventRepository.countByTraceId("trace-1")).thenReturn(buildEventCounts(1, 0));
+
+        var result = subject.getTrace("trace-1");
+
+        assertThat(result.getStatus()).isEqualTo("TTL_EXPIRED_FOR_EVENT");
+        assertThat(trace.getStatus()).isEqualTo(TraceStatus.TTL_EXPIRED_FOR_EVENT);
+        verify(traceRepository).save(trace);
+    }
+
+    @Test
+    void shouldNotUpdateTraceStatus_WhenDeadlineBreachedButTraceIsNotWaitingOtherEvent() {
+        var subject = buildSubject(new SafeguardProperties(false, 0L));
+        var trace = new Trace();
+        trace.setTraceId("trace-1");
+        trace.setStatus(TraceStatus.COMPLETED);
+        var expectedBefore = Instant.now().minusSeconds(100);
+        var transition = buildTransition(trace, "APPLICATION_RECEIVED", EventResult.SUCCESS, null, expectedBefore);
+        when(traceTransitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(transition));
+        when(eventRepository.countByTraceId("trace-1")).thenReturn(buildEventCounts(1, 0));
+
+        var result = subject.getTrace("trace-1");
+
+        assertThat(result.getStatus()).isEqualTo("COMPLETED");
+        verify(traceRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldNotUpdateTraceStatus_WhenSafeguardOffsetKeepsDeadlineInFuture() {
+        var subject = buildSubject(new SafeguardProperties(true, 60L));
+        var trace = new Trace();
+        trace.setTraceId("trace-1");
+        trace.setStatus(TraceStatus.WAITING_OTHER_EVENT);
+        var expectedBefore = Instant.now().minusSeconds(5);
+        var transition = buildTransition(trace, "APPLICATION_RECEIVED", EventResult.SUCCESS, "RULES_EVALUATED", expectedBefore);
+        when(traceTransitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.of(transition));
+        when(eventRepository.countByTraceId("trace-1")).thenReturn(buildEventCounts(1, 0));
+
+        var result = subject.getTrace("trace-1");
+
+        assertThat(result.getStatus()).isEqualTo("WAITING_OTHER_EVENT");
+        verify(traceRepository, never()).save(any());
+    }
+
+    @Test
     void shouldReturnExistingTrace_WhenTraceAlreadyExists() {
+        var subject = buildSubject();
         var existing = new Trace();
         existing.setTraceId("trace-1");
         existing.setStatus(TraceStatus.WAITING_OTHER_EVENT);
@@ -79,6 +170,7 @@ class TraceServiceImplTest {
 
     @Test
     void shouldCreateAndPersistNewTrace_WhenTraceDoesNotExist() {
+        var subject = buildSubject();
         when(traceRepository.findById("trace-2")).thenReturn(Optional.empty());
         when(traceRepository.save(any(Trace.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -94,6 +186,7 @@ class TraceServiceImplTest {
 
     @Test
     void shouldUpdateAndPersistTraceStatus_WhenUpdateStatusIsCalled() {
+        var subject = buildSubject();
         var trace = new Trace();
         trace.setTraceId("trace-1");
         trace.setStatus(TraceStatus.STARTED);
@@ -103,6 +196,28 @@ class TraceServiceImplTest {
 
         assertThat(result.getStatus()).isEqualTo(TraceStatus.WAITING_OTHER_EVENT);
         verify(traceRepository).save(trace);
+    }
+
+    private TraceServiceImpl buildSubject() {
+        return buildSubject(new SafeguardProperties(false, 0L));
+    }
+
+    private TraceServiceImpl buildSubject(SafeguardProperties safeguard) {
+        return new TraceServiceImpl(traceRepository, traceTransitionRepository, eventRepository, safeguard);
+    }
+
+    private EventRepository.EventCounts buildEventCounts(long validEvents, long invalidEvents) {
+        return new EventRepository.EventCounts() {
+            @Override
+            public long getValidEvents() {
+                return validEvents;
+            }
+
+            @Override
+            public long getInvalidEvents() {
+                return invalidEvents;
+            }
+        };
     }
 
     private TraceTransition buildTransition(Trace trace, String eventName, EventResult eventResult,

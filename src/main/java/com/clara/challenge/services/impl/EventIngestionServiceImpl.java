@@ -13,6 +13,7 @@ import com.clara.challenge.repositories.EventRepository;
 import com.clara.challenge.repositories.TraceTransitionRepository;
 import com.clara.challenge.services.internal.EventIngestionService;
 import com.clara.challenge.services.internal.TraceIngestionService;
+import com.clara.challenge.utils.TtlEvaluator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
@@ -37,6 +38,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         var currentTransition = transitionRepository
                 .findLatestByTraceId(event.getTrace().getTraceId())
                 .orElse(null);
+
         var context = new EventIngestionContext(event, currentTransition);
         filterChain.doFilter(context);
 
@@ -73,15 +75,11 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     }
 
     private boolean isTtlBreached(final Event event, final TraceTransition previousTransition) {
-        if (event.getTrace().getStatus() != TraceStatus.WAITING_OTHER_EVENT
-                || previousTransition == null
-                || previousTransition.getExpectedBefore() == null) {
+        if (event.getTrace().getStatus() != TraceStatus.WAITING_OTHER_EVENT || previousTransition == null) {
             return false;
         }
 
-        long offsetSeconds = safeguard.enabled() ? safeguard.offsetSeconds() : 0L;
-        var effectiveDeadline = previousTransition.getExpectedBefore().plusSeconds(offsetSeconds);
-        return Instant.now().isAfter(effectiveDeadline);
+        return TtlEvaluator.isBreached(previousTransition.getExpectedBefore(), safeguard);
     }
 
     private TraceTransition buildTraceTransition(final Event event, final TraceStatus status) {

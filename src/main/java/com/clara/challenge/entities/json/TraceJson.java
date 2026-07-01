@@ -33,6 +33,9 @@ public class TraceJson {
   @JsonFormat(shape = JsonFormat.Shape.STRING)
   private Instant nextExpectedBefore;
 
-  @JsonProperty("eventsReceived")
-  private int eventsReceived;
+  @JsonProperty("validEvents")
+  private int validEvents;
+
+  @JsonProperty("invalidEvents")
+  private int invalidEvents;
 }
