@@ -42,6 +42,7 @@ CREATE
       next_expected_event VARCHAR NULL,
       next_event_ttl_seconds INT NULL,
       final_event BOOLEAN NOT NULL DEFAULT FALSE,
+      accepted BOOLEAN NOT NULL,
       metadata JSONB NULL
     );
 
@@ -51,9 +52,7 @@ CREATE
       id BIGSERIAL PRIMARY KEY,
       trace_id VARCHAR NOT NULL REFERENCES traces(trace_id),
       event_id VARCHAR NOT NULL REFERENCES events(event_id),
-      expected_event_name VARCHAR NOT NULL,
-      ttl_seconds INT NOT NULL,
-      expected_before TIMESTAMPTZ NOT NULL,
+      expected_before TIMESTAMPTZ,
       registration_datetime TIMESTAMPTZ NOT NULL
     );
 

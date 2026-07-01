@@ -19,6 +19,16 @@ another one to be used in Services, under internal/
 
 Controllers will communicate only with Services under api. These services will return data classes annotated with Jackson
 
+Preferred package structure will be:
+
+- com.clara.challenge.controllers
+- com.clara.challenge.services
+- com.clara.challenge.services.api
+- com.clara.challenge.services.impl
+- com.clara.challenge.services.internal
+- com.clara.challenge.entities
+- com.clara.challenge.entities.json
+
 # Guardrails
 ## When developing new features
 - The JSON is the public contract, do not modify it without explicit permission and the reason why it is necessary

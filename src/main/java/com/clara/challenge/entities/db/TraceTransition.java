@@ -1,4 +1,4 @@
-package com.clara.challenge.entities;
+package com.clara.challenge.entities.db;
 
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -25,13 +25,7 @@ public class TraceTransition {
   @JoinColumn(name = "event_id", nullable = false)
   private Event event;
 
-  @Column(name = "expected_event_name", nullable = false)
-  private String expectedEventName;
-
-  @Column(name = "ttl_seconds", nullable = false)
-  private Integer ttlSeconds;
-
-  @Column(name = "expected_before", nullable = false)
+  @Column(name = "expected_before")
   private Instant expectedBefore;
 
   @Column(name = "registration_datetime", nullable = false)

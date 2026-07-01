@@ -1,6 +1,6 @@
-package com.clara.challenge.entities;
+package com.clara.challenge.entities.db;
 
-import com.clara.challenge.entities.enums.EventResult;
+import com.clara.challenge.entities.db.enums.EventResult;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -46,6 +46,9 @@ public class Event {
 
   @Column(name = "final_event", nullable = false)
   private boolean finalEvent = false;
+
+  @Column(name = "accepted", nullable = false)
+  private boolean accepted;
 
   @Type(JsonType.class)
   @Column(name = "metadata", columnDefinition = "jsonb")

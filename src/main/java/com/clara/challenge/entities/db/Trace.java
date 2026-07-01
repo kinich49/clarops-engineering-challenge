@@ -1,6 +1,6 @@
-package com.clara.challenge.entities;
+package com.clara.challenge.entities.db;
 
-import com.clara.challenge.entities.enums.TraceStatus;
+import com.clara.challenge.entities.db.enums.TraceStatus;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,4 +35,6 @@ public class Trace {
 
   @OneToMany(mappedBy = "trace", fetch = FetchType.LAZY)
   private List<TraceTransition> transitions = new ArrayList<>();
+
+  private transient int totalEvents;
 }
