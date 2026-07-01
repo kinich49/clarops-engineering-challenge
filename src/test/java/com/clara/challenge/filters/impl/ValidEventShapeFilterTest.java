@@ -36,6 +36,7 @@ class ValidEventShapeFilterTest {
         subject.doFilter(context, chain);
 
         assertThat(context.shouldIngest()).isFalse();
+        assertThat(context.isInvalid()).isTrue();
         assertThat(context.getRejectionReason()).contains("RULES_EVALUATED");
         verifyNoInteractions(chain);
     }
@@ -60,6 +61,7 @@ class ValidEventShapeFilterTest {
         subject.doFilter(context, chain);
 
         assertThat(context.shouldIngest()).isFalse();
+        assertThat(context.isInvalid()).isTrue();
         assertThat(context.getRejectionReason()).contains("nextEventTtlSeconds");
         verifyNoInteractions(chain);
     }

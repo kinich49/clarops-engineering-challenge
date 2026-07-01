@@ -6,6 +6,7 @@ import com.clara.challenge.entities.db.TraceTransition;
 import com.clara.challenge.entities.db.enums.EventResult;
 import com.clara.challenge.entities.db.enums.TraceStatus;
 import com.clara.challenge.entities.misc.SafeguardProperties;
+import com.clara.challenge.exceptions.InvalidEventException;
 import com.clara.challenge.filters.EventIngestionContext;
 import com.clara.challenge.filters.EventIngestionFilter;
 import com.clara.challenge.filters.EventIngestionFilterChain;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -85,6 +87,24 @@ class EventIngestionServiceImplTest {
         assertThat(event.isAccepted()).isFalse();
         assertThat(result.event()).isSameAs(event);
         assertThat(result.transition()).isNull();
+        verify(eventRepository).save(event);
+        verify(transitionRepository, never()).save(any());
+        verifyNoInteractions(traceIngestionService);
+    }
+
+    @Test
+    void shouldPersistEventAndThrowInvalidEventException_WhenFilterChainRejectsAsInvalid() {
+        var rejectingFilter = rejectingAsInvalidFilter("Event is marked final but declares a nextExpectedEvent: RULES_EVALUATED");
+        var subject = buildSubject(rejectingFilter);
+        var event = buildEvent("trace-1", 60);
+        when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
+        when(eventRepository.save(event)).thenReturn(event);
+
+        assertThatThrownBy(() -> subject.ingestEvent(event))
+                .isInstanceOf(InvalidEventException.class)
+                .hasMessageContaining("RULES_EVALUATED");
+
+        assertThat(event.isAccepted()).isFalse();
         verify(eventRepository).save(event);
         verify(transitionRepository, never()).save(any());
         verifyNoInteractions(traceIngestionService);
@@ -493,6 +513,16 @@ class EventIngestionServiceImplTest {
         doAnswer(invocation -> {
             EventIngestionContext context = invocation.getArgument(0);
             context.reject(reason);
+            return null;
+        }).when(filter).doFilter(any(), any());
+        return filter;
+    }
+
+    private EventIngestionFilter rejectingAsInvalidFilter(String reason) {
+        var filter = mock(EventIngestionFilter.class);
+        doAnswer(invocation -> {
+            EventIngestionContext context = invocation.getArgument(0);
+            context.rejectAsInvalid(reason);
             return null;
         }).when(filter).doFilter(any(), any());
         return filter;

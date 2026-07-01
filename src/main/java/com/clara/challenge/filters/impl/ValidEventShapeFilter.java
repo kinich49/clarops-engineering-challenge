@@ -18,13 +18,13 @@ public class ValidEventShapeFilter implements EventIngestionFilter {
         var hasTtl = newEvent.getNextEventTtlSeconds() != null && newEvent.getNextEventTtlSeconds() != 0;
 
         if (newEvent.isFinalEvent() && hasNextExpectedEvent) {
-            context.reject("Event is marked final but declares a nextExpectedEvent: "
+            context.rejectAsInvalid("Event is marked final but declares a nextExpectedEvent: "
                     + newEvent.getNextExpectedEvent());
             return;
         }
 
         if (hasTtl && !hasNextExpectedEvent) {
-            context.reject("Event declares a nextEventTtlSeconds but no nextExpectedEvent");
+            context.rejectAsInvalid("Event declares a nextEventTtlSeconds but no nextExpectedEvent");
             return;
         }
 

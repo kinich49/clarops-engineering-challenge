@@ -12,10 +12,16 @@ public class EventIngestionContext {
 
     private boolean shouldIngest = true;
     private String rejectionReason;
+    private boolean invalid;
 
     public void reject(String reason) {
         this.shouldIngest = false;
         this.rejectionReason = reason;
+    }
+
+    public void rejectAsInvalid(String reason) {
+        reject(reason);
+        this.invalid = true;
     }
 
     public boolean shouldIngest() {

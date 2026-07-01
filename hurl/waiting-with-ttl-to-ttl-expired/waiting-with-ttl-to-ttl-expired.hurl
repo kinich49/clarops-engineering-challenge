@@ -21,7 +21,7 @@ Content-Type: application/json
   "occurredAt": "2026-01-01T05:00:00Z",
   "finalEvent": false,
   "nextExpectedEvent": "RULES_EVALUATED",
-  "nextEventTtlSeconds": 2
+  "nextEventTtlSeconds": 1
 }
 
 HTTP 200
@@ -40,7 +40,7 @@ jsonpath "$.nextExpectedBefore" matches "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d
 POST http://localhost:8080/api/events
 Content-Type: application/json
 [Options]
-delay: 4000
+delay: 1200
 {
   "eventId": "tte-event-2-{{run_id}}",
   "traceId": "trace-waiting-ttl-expired-{{run_id}}",

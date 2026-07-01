@@ -6,6 +6,7 @@ import com.clara.challenge.entities.db.enums.EventResult;
 import com.clara.challenge.entities.db.enums.TraceStatus;
 import com.clara.challenge.entities.misc.EventDTO;
 import com.clara.challenge.entities.misc.SafeguardProperties;
+import com.clara.challenge.exceptions.InvalidEventException;
 import com.clara.challenge.filters.EventIngestionContext;
 import com.clara.challenge.filters.EventIngestionFilter;
 import com.clara.challenge.filters.impl.DefaultEventIngestionFilterChain;
@@ -52,6 +53,9 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             return new EventDTO(persistedEvent, newTransition);
         } else {
             var persistedEvent = eventRepository.save(event);
+            if (context.isInvalid()) {
+                throw new InvalidEventException(context.getRejectionReason());
+            }
             return new EventDTO(persistedEvent, null);
         }
     }
