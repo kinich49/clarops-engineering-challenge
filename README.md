@@ -1,5 +1,80 @@
 # Distributed Event Watchdog Challenge
 
+# Candidate update
+## Problem understanding
+The service aims to solve persisting events, and keeping track of a group events related by a trace-id.
+The goal is to know the overall status of the trace, not a single event.
+
+## Assumptions:
+- Event result does not terminate the trace flow
+- Recording of events is a must. There could be some events that arrive in a bad state (e.g. Event is both marked as final and expects a next event)
+- Events can get created in the past with a TTL in the past
+- Events cannot be retried
+
+## Technical decisions
+- TTL starts counting by the time the event was received as the lower boundaries of occurredAt are not specified.
+- totalEvents was replaced by validEvents and invalidEvents. The GET Trace status will return the count of these. This can be later used for audit and debugging purposes.
+- A table TraceTransitions was added to try to preserve a healthy trace status (e.g. an Event is waiting for a specific event, an unexpected event arrives, the event is still waiting for that event)
+- This table transition will also help debugging the trace status, and why and when a trace changed from one status to another
+- The Events will always be tried to be preserved even if they are inconsistent (e.g. an unexpected event will be persisted, an event with inconsistent state will be persisted)
+- When an event with inconsistent state is received, a 400 response is returned. This decision was not taken lightly and derived from the need to make sure clients are sending events that are consistent
+- Added a small buff to the TTL that can be turned off and on using a property. A service restart will be required to turn on/off the buff.
+  Submission Instructions
+- There are two service interfaces one in api/ and another in internal/. api/ is intended for service methods that will be called from the controller layer. internal/ is inteded for service methods that
+  can be called from service layer.
+
+## trade-offs
+- response status 400 and 200. A decision was made to try validating the data the client sends. We send 400 when the data is inconsistent with itself or the json is malformed, and we send 200 when the data is consistend but
+  the event is not valid (e.g. unexpected event).
+- All events are stored regardless. This will increase the table size but we gain an audit trial. An alternative would be to asyncly send the data to a datalake and avoid stale data
+- TraceTransition is a two-edge sword. We gain visibility on why a trace changed status, why some events might be considered invalid, but we have two sources of truth: The events table and the TraceTransitions table.
+
+## How to run the project
+exec mvn spring-boot:run with Java 21
+
+## How to run the Hurl tests
+A script was added to generate random event-ids/trace-ids and make every test independent of each other.
+```bash
+cd hurl
+./run-tests.sh
+```
+
+## Requests and response examples
+
+POST /api/events
+### request
+```json
+{
+  "eventId": "my-event-id",
+  "traceId": "my-trace-id",
+  "eventName": "MY EVENT",
+  "result": "SUCCESS",
+  "occurredAt": "2026-01-01T05:00:00Z",
+  "finalEvent": false,
+  "nextExpectedEvent": "MY NEXT EVENT",
+  "nextEventTtlSeconds": 1
+}
+```
+### Response
+HTTP 200
+HTTP 400
+
+GET /api/traces/:trace-id/status
+### Response
+```json
+{
+  "traceId": "trace-20001",
+  "status": "COMPLETED",
+  "lastEventName": "event-1001",
+  "lastEventResult": "SUCCESS",
+  "nextExpectedEvent": null,
+  "nextExpectedBefore": null,
+  "validEvents": 1,
+  "invalidEvents": 2
+}
+```
+
+
 ## Context
 
 In Clarops, some operational flows are distributed across multiple services. Each service may emit events when it completes an action. In many cases, after one event is received, another event is expected to arrive within a specific time window.
@@ -305,46 +380,6 @@ Your submitted fork must include:
 9. All Hurl tests must pass successfully.
 
 ---
-
-# Candidate update
-## Problem understanding 
-The service aims to solve persisting events, and keeping track of a group events related by a trace-id.
-The goal is to know the overall status of the trace, not a single event.
-
-## Assumptions:
-- Event result does not terminate the trace flow
-- Recording of events is a must. There could be some events that arrive in a bad state (e.g. Event is both marked as final and expects a next event) 
-- Events can get created in the past with a TTL in the past
-- Events cannot be retried
-
-## Technical decisions
-- TTL starts counting by the time the event was received as the lower boundaries of occurredAt are not specified. 
-- A table TraceTransitions was added to try to preserve a healthy trace status (e.g. an Event is waiting for a specific event, an unexpected event arrives, the event is still waiting for that event)
-- This table transition will also help debugging the trace status, and why and when a trace changed from one status to another
-- The Events will always be tried to be preserved even if they are inconsistent (e.g. an unexpected event will be persisted, an event with inconsistent state will be persisted)
-- When an event with inconsistent state is received, a 400 response is returned. This decision was not taken lightly and derived from the need to make sure clients are sending events that are consistent
-- Added a small buff to the TTL that can be turned off and on using a property. A service restart will be required to turn on/off the buff.
-Submission Instructions
-- There are two service interfaces one in api/ and another in internal/. api/ is intended for service methods that will be called from the controller layer. internal/ is inteded for service methods that 
-can be called from service layer.
-
-## trade-offs
-- response status 400 and 200. A decision was made to try validating the data the client sends. We send 400 when the data is inconsistent with itself or the json is malformed, and we send 200 when the data is consistend but
-the event is not valid (e.g. unexpected event). 
-- All events are stored regardless. This will increase the table size but we gain an audit trial. An alternative would be to asyncly send the data to a datalake and avoid stale data
-- TraceTransition is a two-edge sword. We gain visibility on why a trace changed status, why some events might be considered invalid, but we have two sources of truth: The events table and the TraceTransitions table.
-
-## How to run the project
-exec mvn spring-boot:run with Java 21
-
-## How to run the Hurl tests
-A script was added to generate random event-ids/trace-ids and make every test independent of each other.
-```bash
-cd hurl
-./run-tests.sh
-```
-
-## Requests and response examples
 
 # TASKS.md Requirement
 
