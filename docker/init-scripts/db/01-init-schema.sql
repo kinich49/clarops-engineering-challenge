@@ -22,8 +22,8 @@ CREATE
     );
 
 CREATE
-  TABLE IF NOT EXISTS
-    traces(
+  TABLE
+    IF NOT EXISTS traces(
       trace_id VARCHAR PRIMARY KEY,
       status VARCHAR NOT NULL,
       registration_datetime TIMESTAMPTZ NOT NULL,
@@ -31,8 +31,8 @@ CREATE
     );
 
 CREATE
-  TABLE IF NOT EXISTS
-    events(
+  TABLE
+    IF NOT EXISTS events(
       event_id VARCHAR PRIMARY KEY,
       trace_id VARCHAR NOT NULL REFERENCES traces(trace_id),
       event_name VARCHAR NOT NULL,
@@ -47,8 +47,8 @@ CREATE
     );
 
 CREATE
-  TABLE IF NOT EXISTS
-    trace_transitions(
+  TABLE
+    IF NOT EXISTS trace_transitions(
       id BIGSERIAL PRIMARY KEY,
       trace_id VARCHAR NOT NULL REFERENCES traces(trace_id),
       event_id VARCHAR NOT NULL REFERENCES events(event_id),
@@ -57,8 +57,8 @@ CREATE
       registration_datetime TIMESTAMPTZ NOT NULL
     );
 
-CREATE  IF NOT EXISTS
-  INDEX idx_events_trace_id ON
+CREATE
+  IF NOT EXISTS INDEX idx_events_trace_id ON
   events(
     trace_id,
     occurred_at DESC

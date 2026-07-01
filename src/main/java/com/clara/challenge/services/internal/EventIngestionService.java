@@ -5,6 +5,5 @@ import com.clara.challenge.entities.misc.EventDTO;
 
 public interface EventIngestionService {
 
-    EventDTO ingestEvent(final Event event);
-
+  EventDTO ingestEvent(final Event event);
 }

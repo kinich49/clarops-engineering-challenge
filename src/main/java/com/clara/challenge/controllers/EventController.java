@@ -11,12 +11,11 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class EventController {
 
-    private final EventService eventService;
+  private final EventService eventService;
 
-    @PostMapping
-    @ResponseStatus(HttpStatus.OK)
-    public void postEvent(@RequestBody EventJson eventJson) {
-        eventService.acceptEvent(eventJson)
-                .orElseThrow(RuntimeException::new);
-    }
+  @PostMapping
+  @ResponseStatus(HttpStatus.OK)
+  public void postEvent(@RequestBody EventJson eventJson) {
+    eventService.acceptEvent(eventJson).orElseThrow(RuntimeException::new);
+  }
 }

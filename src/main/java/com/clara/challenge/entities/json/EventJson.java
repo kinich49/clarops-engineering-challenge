@@ -3,12 +3,11 @@ package com.clara.challenge.entities.json;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.time.Instant;
+import java.util.Map;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.time.Instant;
-import java.util.Map;
 
 @Getter
 @Setter
@@ -17,30 +16,22 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class EventJson {
 
-    @JsonProperty
-    private String eventId;
+  @JsonProperty private String eventId;
 
-    @JsonProperty
-    private String traceId;
+  @JsonProperty private String traceId;
 
-    @JsonProperty
-    private String eventName;
+  @JsonProperty private String eventName;
 
-    @JsonProperty
-    private EventResultJson result;
+  @JsonProperty private EventResultJson result;
 
-    @JsonProperty
-    private Instant occurredAt;
+  @JsonProperty private Instant occurredAt;
 
-    @JsonProperty
-    private String nextExpectedEvent;
+  @JsonProperty private String nextExpectedEvent;
 
-    @JsonProperty
-    private Integer nextEventTtlSeconds;
+  @JsonProperty private Integer nextEventTtlSeconds;
 
-    @JsonProperty(defaultValue = "false")
-    private boolean finalEvent;
+  @JsonProperty(defaultValue = "false")
+  private boolean finalEvent;
 
-    @JsonProperty
-    private Map<String, Object> metadata;
+  @JsonProperty private Map<String, Object> metadata;
 }

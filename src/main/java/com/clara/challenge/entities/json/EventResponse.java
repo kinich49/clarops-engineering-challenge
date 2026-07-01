@@ -8,10 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class EventResponse {
 
-    @JsonProperty
-    private String traceId;
-    @JsonProperty
-    private String eventId;
-    @JsonProperty
-    private boolean accepted;
+  @JsonProperty private String traceId;
+  @JsonProperty private String eventId;
+  @JsonProperty private boolean accepted;
 }

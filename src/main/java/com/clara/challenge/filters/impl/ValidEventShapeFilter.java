@@ -11,23 +11,25 @@ import org.springframework.util.ObjectUtils;
 @Order(0)
 public class ValidEventShapeFilter implements EventIngestionFilter {
 
-    @Override
-    public void doFilter(EventIngestionContext context, EventIngestionFilterChain chain) {
-        var newEvent = context.getNewEvent();
-        var hasNextExpectedEvent = !ObjectUtils.isEmpty(newEvent.getNextExpectedEvent());
-        var hasTtl = newEvent.getNextEventTtlSeconds() != null && newEvent.getNextEventTtlSeconds() != 0;
+  @Override
+  public void doFilter(EventIngestionContext context, EventIngestionFilterChain chain) {
+    var newEvent = context.getNewEvent();
+    var hasNextExpectedEvent = !ObjectUtils.isEmpty(newEvent.getNextExpectedEvent());
+    var hasTtl =
+        newEvent.getNextEventTtlSeconds() != null && newEvent.getNextEventTtlSeconds() != 0;
 
-        if (newEvent.isFinalEvent() && hasNextExpectedEvent) {
-            context.rejectAsInvalid("Event is marked final but declares a nextExpectedEvent: "
-                    + newEvent.getNextExpectedEvent());
-            return;
-        }
-
-        if (hasTtl && !hasNextExpectedEvent) {
-            context.rejectAsInvalid("Event declares a nextEventTtlSeconds but no nextExpectedEvent");
-            return;
-        }
-
-        chain.doFilter(context);
+    if (newEvent.isFinalEvent() && hasNextExpectedEvent) {
+      context.rejectAsInvalid(
+          "Event is marked final but declares a nextExpectedEvent: "
+              + newEvent.getNextExpectedEvent());
+      return;
     }
+
+    if (hasTtl && !hasNextExpectedEvent) {
+      context.rejectAsInvalid("Event declares a nextEventTtlSeconds but no nextExpectedEvent");
+      return;
+    }
+
+    chain.doFilter(context);
+  }
 }

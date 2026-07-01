@@ -5,7 +5,7 @@ import com.clara.challenge.entities.db.enums.TraceStatus;
 
 public interface TraceIngestionService {
 
-    Trace findOrCreate(String traceId);
+  Trace findOrCreate(String traceId);
 
-    Trace updateStatus(Trace trace, TraceStatus status);
+  Trace updateStatus(Trace trace, TraceStatus status);
 }
