@@ -1,9 +1,9 @@
 package com.clara.challenge.services.impl;
 
+import com.clara.challenge.config.SafeguardProperties;
 import com.clara.challenge.entities.db.Trace;
 import com.clara.challenge.entities.db.enums.TraceStatus;
 import com.clara.challenge.entities.json.TraceJson;
-import com.clara.challenge.entities.misc.SafeguardProperties;
 import com.clara.challenge.exceptions.TraceNotFoundException;
 import com.clara.challenge.repositories.EventRepository;
 import com.clara.challenge.repositories.TraceRepository;

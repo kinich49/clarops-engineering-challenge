@@ -9,12 +9,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.clara.challenge.config.SafeguardProperties;
 import com.clara.challenge.entities.db.Event;
 import com.clara.challenge.entities.db.Trace;
 import com.clara.challenge.entities.db.TraceTransition;
 import com.clara.challenge.entities.db.enums.EventResult;
 import com.clara.challenge.entities.db.enums.TraceStatus;
-import com.clara.challenge.entities.misc.SafeguardProperties;
 import com.clara.challenge.exceptions.InvalidEventException;
 import com.clara.challenge.filters.EventIngestionContext;
 import com.clara.challenge.filters.EventIngestionFilter;

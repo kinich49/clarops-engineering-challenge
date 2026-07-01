@@ -1,6 +1,6 @@
 package com.clara.challenge.utils;
 
-import com.clara.challenge.entities.misc.SafeguardProperties;
+import com.clara.challenge.config.SafeguardProperties;
 import java.time.Instant;
 
 public interface TtlEvaluator {

@@ -3,8 +3,8 @@ package com.clara.challenge.utils;
 import com.clara.challenge.entities.db.Event;
 import com.clara.challenge.entities.db.Trace;
 import com.clara.challenge.entities.db.TraceTransition;
+import com.clara.challenge.entities.dto.EventDTO;
 import com.clara.challenge.entities.json.TraceJson;
-import com.clara.challenge.entities.misc.EventDTO;
 import java.util.Optional;
 
 public interface JsonMapper {

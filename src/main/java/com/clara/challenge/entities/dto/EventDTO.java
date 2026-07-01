@@ -1,4 +1,4 @@
-package com.clara.challenge.entities.misc;
+package com.clara.challenge.entities.dto;
 
 import com.clara.challenge.entities.db.Event;
 import com.clara.challenge.entities.db.TraceTransition;

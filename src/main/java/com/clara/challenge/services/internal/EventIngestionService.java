@@ -1,7 +1,7 @@
 package com.clara.challenge.services.internal;
 
 import com.clara.challenge.entities.db.Event;
-import com.clara.challenge.entities.misc.EventDTO;
+import com.clara.challenge.entities.dto.EventDTO;
 
 public interface EventIngestionService {
 

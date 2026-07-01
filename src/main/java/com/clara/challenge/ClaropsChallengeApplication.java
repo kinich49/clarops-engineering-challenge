@@ -1,6 +1,6 @@
 package com.clara.challenge;
 
-import com.clara.challenge.entities.misc.SafeguardProperties;
+import com.clara.challenge.config.SafeguardProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

@@ -2,7 +2,7 @@ package com.clara.challenge.utils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.clara.challenge.entities.misc.SafeguardProperties;
+import com.clara.challenge.config.SafeguardProperties;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 

@@ -1,11 +1,11 @@
 package com.clara.challenge.services.impl;
 
+import com.clara.challenge.config.SafeguardProperties;
 import com.clara.challenge.entities.db.Event;
 import com.clara.challenge.entities.db.TraceTransition;
 import com.clara.challenge.entities.db.enums.EventResult;
 import com.clara.challenge.entities.db.enums.TraceStatus;
-import com.clara.challenge.entities.misc.EventDTO;
-import com.clara.challenge.entities.misc.SafeguardProperties;
+import com.clara.challenge.entities.dto.EventDTO;
 import com.clara.challenge.exceptions.InvalidEventException;
 import com.clara.challenge.filters.EventIngestionContext;
 import com.clara.challenge.filters.EventIngestionFilter;

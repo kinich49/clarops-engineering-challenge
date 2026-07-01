@@ -1,4 +1,4 @@
-package com.clara.challenge.entities.misc;
+package com.clara.challenge.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
