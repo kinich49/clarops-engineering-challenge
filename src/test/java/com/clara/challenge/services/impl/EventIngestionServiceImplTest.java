@@ -3,7 +3,6 @@ package com.clara.challenge.services.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,7 +18,6 @@ import com.clara.challenge.entities.misc.SafeguardProperties;
 import com.clara.challenge.exceptions.InvalidEventException;
 import com.clara.challenge.filters.EventIngestionContext;
 import com.clara.challenge.filters.EventIngestionFilter;
-import com.clara.challenge.filters.EventIngestionFilterChain;
 import com.clara.challenge.repositories.EventRepository;
 import com.clara.challenge.repositories.TraceTransitionRepository;
 import com.clara.challenge.services.internal.TraceIngestionService;
@@ -46,7 +44,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldPersistEventAndTransition_WhenFilterChainAccepts() {
-    var acceptingFilter = continuingFilter();
+    var acceptingFilter = mockContinueFilter();
     var subject = buildSubject(acceptingFilter);
     var event = buildEvent("trace-1", 60);
     when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
@@ -73,8 +71,8 @@ class EventIngestionServiceImplTest {
   }
 
   @Test
-  void shouldPersistEventOnly_WhenFilterChainRejects() {
-    var rejectingFilter = rejectingFilter("not eligible for ingestion");
+  void shouldPersistEvent_WhenFilterChainRejects() {
+    var rejectingFilter = mockRejectFilter("not eligible for ingestion");
     var subject = buildSubject(rejectingFilter);
     var event = buildEvent("trace-1", 60);
     when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
@@ -112,8 +110,8 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldStopAtRejectingFilter_WhenChainHasMultipleFilters() {
-    var firstFilter = continuingFilter();
-    var secondFilter = rejectingFilter("out of sequence");
+    var firstFilter = mockContinueFilter();
+    var secondFilter = mockRejectFilter("out of sequence");
     var thirdFilter = mock(EventIngestionFilter.class);
     var subject = buildSubject(firstFilter, secondFilter, thirdFilter);
     var event = buildEvent("trace-1", 60);
@@ -131,7 +129,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldSetTraceStatusToCompleted_WhenEventIsFinalAndResultIsSuccess() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.setFinalEvent(true);
     event.setEventResult(EventResult.SUCCESS);
@@ -147,7 +145,7 @@ class EventIngestionServiceImplTest {
   @Test
   void
       shouldSetTraceStatusToCompleted_WhenEventIsFinalAndResultIsSuccessEvenIfNextExpectedEventIsPresent() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.setFinalEvent(true);
     event.setEventResult(EventResult.SUCCESS);
@@ -163,7 +161,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldSetTraceStatusToError_WhenEventIsFinalAndResultIsError() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.setFinalEvent(true);
     event.setEventResult(EventResult.ERROR);
@@ -179,7 +177,7 @@ class EventIngestionServiceImplTest {
   @Test
   void
       shouldSetTraceStatusToError_WhenEventIsFinalAndResultIsErrorEvenIfNextExpectedEventIsPresent() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.setFinalEvent(true);
     event.setEventResult(EventResult.ERROR);
@@ -195,7 +193,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldSetTraceStatusToWaitingOtherEvent_WhenEventIsNotFinalAndHasNextExpectedEvent() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.setFinalEvent(false);
     event.setNextExpectedEvent("RULES_EVALUATED");
@@ -213,7 +211,7 @@ class EventIngestionServiceImplTest {
   @ValueSource(strings = {""})
   void shouldSetTraceStatusToStarted_WhenEventIsNotFinalAndHasNoNextExpectedEvent(
       String nextExpectedEvent) {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.setFinalEvent(false);
     event.setNextExpectedEvent(nextExpectedEvent);
@@ -232,7 +230,7 @@ class EventIngestionServiceImplTest {
   void
       shouldSetTraceStatusToInProgress_WhenTraceWasWaitingOtherEventAndEventIsNotFinalAndHasNoNextExpectedEvent(
           String nextExpectedEvent) {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     event.setFinalEvent(false);
@@ -252,7 +250,7 @@ class EventIngestionServiceImplTest {
   void
       shouldKeepTraceStatusInProgress_WhenTraceWasAlreadyInProgressAndEventIsNotFinalAndHasNoNextExpectedEvent(
           String nextExpectedEvent) {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.getTrace().setStatus(TraceStatus.IN_PROGRESS);
     event.setFinalEvent(false);
@@ -269,7 +267,7 @@ class EventIngestionServiceImplTest {
   @Test
   void
       shouldSetTraceStatusToCompleted_WhenTraceWasWaitingOtherEventAndEventIsFinalAndResultIsSuccess() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     event.setFinalEvent(true);
@@ -285,7 +283,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldSetTraceStatusToError_WhenTraceWasWaitingOtherEventAndEventIsFinalAndResultIsError() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     event.setFinalEvent(true);
@@ -302,7 +300,7 @@ class EventIngestionServiceImplTest {
   @Test
   void
       shouldSetTraceStatusToWaitingOtherEvent_WhenTraceWasWaitingOtherEventAndEventDeclaresNextExpectedEvent() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     event.setFinalEvent(false);
@@ -318,7 +316,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldAcceptEventAndSetTraceStatusToTtlExpiredForEvent_WhenDeadlineIsBreached() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", null);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     var priorTransition = buildPriorTransition(Instant.now().minusSeconds(100));
@@ -335,7 +333,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldSetTraceStatusToTtlExpiredForEvent_EvenIfEventIsFinal() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", null);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     event.setFinalEvent(true);
@@ -353,7 +351,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldSetTraceStatusToTtlExpiredForEvent_EvenIfEventDeclaresNextExpectedEvent() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", 60);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     event.setNextExpectedEvent("SHIPMENT_DISPATCHED");
@@ -370,7 +368,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldNotSetTtlExpired_WhenDeadlineNotYetReached() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", null);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     var priorTransition = buildPriorTransition(Instant.now().plusSeconds(100));
@@ -386,7 +384,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldNotSetTtlExpired_WhenTraceStatusIsNotWaitingOtherEvent() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", null);
     var priorTransition = buildPriorTransition(Instant.now().minusSeconds(100));
     when(transitionRepository.findLatestByTraceId("trace-1"))
@@ -401,7 +399,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldNotSetTtlExpired_WhenPreviousTransitionHasNoExpectedBefore() {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", null);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     var priorTransition = buildPriorTransition(null);
@@ -417,7 +415,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldSetTtlExpired_WhenSafeguardIsDisabledEvenWithOffsetConfigured() {
-    var subject = buildSubject(new SafeguardProperties(false, 3600L), continuingFilter());
+    var subject = buildSubject(new SafeguardProperties(false, 3600L), mockContinueFilter());
     var event = buildEvent("trace-1", null);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     var priorTransition = buildPriorTransition(Instant.now().minusSeconds(100));
@@ -432,7 +430,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldSetTtlExpired_WhenSafeguardEnabledButDeadlineStillBreachedAfterOffset() {
-    var subject = buildSubject(new SafeguardProperties(true, 10L), continuingFilter());
+    var subject = buildSubject(new SafeguardProperties(true, 10L), mockContinueFilter());
     var event = buildEvent("trace-1", null);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     var priorTransition = buildPriorTransition(Instant.now().minusSeconds(1000));
@@ -447,7 +445,7 @@ class EventIngestionServiceImplTest {
 
   @Test
   void shouldNotSetTtlExpired_WhenSafeguardOffsetKeepsDeadlineInFuture() {
-    var subject = buildSubject(new SafeguardProperties(true, 60L), continuingFilter());
+    var subject = buildSubject(new SafeguardProperties(true, 60L), mockContinueFilter());
     var event = buildEvent("trace-1", null);
     event.getTrace().setStatus(TraceStatus.WAITING_OTHER_EVENT);
     var priorTransition = buildPriorTransition(Instant.now().minusSeconds(5));
@@ -464,7 +462,7 @@ class EventIngestionServiceImplTest {
   @NullSource
   @ValueSource(ints = {0})
   void shouldNotSetExpectedBefore_WhenNextEventTtlSecondsIsNullOrZero(Integer ttlSeconds) {
-    var subject = buildSubject(continuingFilter());
+    var subject = buildSubject(mockContinueFilter());
     var event = buildEvent("trace-1", ttlSeconds);
     when(transitionRepository.findLatestByTraceId("trace-1")).thenReturn(Optional.empty());
     when(eventRepository.save(event)).thenReturn(event);
@@ -518,44 +516,16 @@ class EventIngestionServiceImplTest {
         List.of(filters), eventRepository, transitionRepository, traceIngestionService, safeguard);
   }
 
-  private EventIngestionFilter continuingFilter() {
-    var filter = mock(EventIngestionFilter.class);
-    doAnswer(
-            invocation -> {
-              EventIngestionContext context = invocation.getArgument(0);
-              EventIngestionFilterChain chain = invocation.getArgument(1);
-              chain.doFilter(context);
-              return null;
-            })
-        .when(filter)
-        .doFilter(any(), any());
-    return filter;
+  private EventIngestionFilter mockContinueFilter() {
+    return (context, chain) -> chain.doFilter(context);
   }
 
-  private EventIngestionFilter rejectingFilter(String reason) {
-    var filter = mock(EventIngestionFilter.class);
-    doAnswer(
-            invocation -> {
-              EventIngestionContext context = invocation.getArgument(0);
-              context.reject(reason);
-              return null;
-            })
-        .when(filter)
-        .doFilter(any(), any());
-    return filter;
+  private EventIngestionFilter mockRejectFilter(String reason) {
+    return (context, chain) -> context.reject(reason);
   }
 
   private EventIngestionFilter rejectingAsInvalidFilter(String reason) {
-    var filter = mock(EventIngestionFilter.class);
-    doAnswer(
-            invocation -> {
-              EventIngestionContext context = invocation.getArgument(0);
-              context.rejectAsInvalid(reason);
-              return null;
-            })
-        .when(filter)
-        .doFilter(any(), any());
-    return filter;
+    return (context, chain) -> context.rejectAsInvalid(reason);
   }
 
   private TraceTransition buildPriorTransition(Instant expectedBefore) {

@@ -19,12 +19,16 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
 
 @Service
 @RequiredArgsConstructor
 public class EventIngestionServiceImpl implements EventIngestionService {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(EventIngestionServiceImpl.class);
 
   private final List<EventIngestionFilter> filters;
   private final EventRepository eventRepository;
@@ -50,6 +54,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
       transitionRepository.save(newTransition);
       return new EventDTO(persistedEvent, newTransition);
     } else {
+      LOGGER.warn("Event with id {} not added to trace history", event.getEventId());
       var persistedEvent = eventRepository.save(event);
       if (context.isInvalid()) {
         throw new InvalidEventException(context.getRejectionReason());

@@ -32,20 +32,20 @@ class ValidEventShapeFilterTest {
   @Test
   void shouldRejectEvent_WhenEventIsFinalAndDeclaresNextExpectedEvent() {
     var chain = mock(EventIngestionFilterChain.class);
-    var context = buildContext(true, "RULES_EVALUATED", null);
+    var context = buildContext(true, "myExpectedEvent", null);
 
     subject.doFilter(context, chain);
 
     assertThat(context.shouldIngest()).isFalse();
     assertThat(context.isInvalid()).isTrue();
-    assertThat(context.getRejectionReason()).contains("RULES_EVALUATED");
+    assertThat(context.getRejectionReason()).contains("myExpectedEvent");
     verifyNoInteractions(chain);
   }
 
   @Test
   void shouldContinueChain_WhenEventDeclaresTtlAndNextExpectedEvent() {
     var chain = mock(EventIngestionFilterChain.class);
-    var context = buildContext(false, "RULES_EVALUATED", 60);
+    var context = buildContext(false, "myExpectedEvent", 60);
 
     subject.doFilter(context, chain);
 
